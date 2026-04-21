@@ -5,9 +5,9 @@ import statistics
 
 from benchmark_db_copy import bootstrap_benchmarks
 from experiment2_core import run_real_time_experiment
-from experiment2_utilities import RealTimeResults
+from experiment2_utilities import RealTimeResult
 
-def print_report(result: RealTimeResults) -> None:
+def print_report(result: RealTimeResult) -> None:
     
     print("Experiment 2: Real Time data capture and analytics")
 
@@ -45,7 +45,7 @@ def print_report(result: RealTimeResults) -> None:
 
     print(f"\n Real-time Data Visibility: ")
     print(f" MySQL: {'New Data Visible' if result.mysql_new_data_visible else 'New Data not visible'}")
-    print(f" CLickhouse: {'New Data visible' if result.clickhouse_new_data_visible else 'New Data not visible'}")
+    print(f" Clickhouse: {'New Data visible' if result.clickhouse_new_data_visible else 'New Data not visible'}")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

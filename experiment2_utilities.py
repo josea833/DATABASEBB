@@ -12,7 +12,7 @@ from benchmark_db_copy import (
 )
 
 @dataclass
-class RealTimeResults:
+class RealTimeResult:
     base_row_count: int
     new_rows_inserted: int
 
@@ -24,9 +24,15 @@ class RealTimeResults:
     mysql_query_ms: list[float]
     clickhouse_query_ms: list[float]
 
+    mysql_new_data_visible: bool
+    clickhouse_new_data_visible: bool
+    mysql_rows_after_query: int
+    clickhouse_rows_after_query: int
+
+
 def insert_new_data_mysql(table_name: str, start_id: int, row_count: int) -> float:
     cfg = load_mysql_config()
-    connect = connect_mysql(cfg)
+    conn = connect_mysql(cfg)
 
     insert_sql = f"""
     INSERT INTO {table_name}(
@@ -37,23 +43,23 @@ def insert_new_data_mysql(table_name: str, start_id: int, row_count: int) -> flo
     """
 
     start_time = time.perf_counter()
-    cur = connect.cursor()
+    cur = conn.cursor()
 
     batch_size = 1000
     for i in range(0, row_count, batch_size):
         batch_rows = min(batch_size, row_count - i)
         rows = generate_benchmark_rows(start_id + i, batch_rows)
         cur.executemany(insert_sql, rows)
-        connect.commit()
+        conn.commit()
 
     cur.close()
-    connect.close()
+    conn.close()
 
     return (time.perf_counter() - start_time) * 1000.0
 
 
 def insert_new_data_clickhouse(table_name: str, start_id: int, row_count: int) -> float:
-    cfg = load_mysql_config()
+    cfg = load_clickhouse_config()
     client = connect_clickhouse(cfg)
 
     start_time = time.perf_counter()
@@ -87,9 +93,9 @@ def insert_new_data_clickhouse(table_name: str, start_id: int, row_count: int) -
 
 def query_recent_data_mysql(table_name: str, lookback_seconds: int = 60) -> tuple[int, float]:
     sql = f"""
-    SELECT COUNT(*), MAX(create_at),  SUM(stock_quantity)
+    SELECT COUNT(*), MAX(created_at),  SUM(stock_quantity)
     FROM {table_name}
-    where created_at >= DATE_SUB(NOW(), INTERVAL {lookback_seconds} SECOND)
+    where created_at >= DATE_SUB(NOW(), INTERVAL {lookback_seconds} SECOND
     """
 
     start = time.perf_counter()
@@ -103,11 +109,11 @@ def query_recent_data_mysql(table_name: str, lookback_seconds: int = 60) -> tupl
 
     return int(row[0]) if row else 0, elapsed_ms
 
-def query_recent_data_clickhouse(table_name:str, loadback_seconds: int = 60) -> tuple[int, float]:
+def query_recent_data_clickhouse(table_name:str, lookback_seconds: int = 60) -> tuple[int, float]:
     sql = f"""
     SELECT COUNT(*), MAX(created_at), SUM(stock_quantity)
     FROM {table_name}
-    WHERE created_at >= now() - INTERVAL{loadback_seconds} SECOND
+    WHERE created_at >= now() - INTERVAL{lookback_seconds} SECOND
     """
 
     start = time.perf_counter()
