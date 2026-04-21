@@ -225,12 +225,12 @@ def connect_clickhouse(cfg: ClickHouseConfig, database: str | None = None):
 
 
 def _load_schema_sql(section: str, table: str, db: str) -> list[str]:
-	"""Return DDL statements for *section* from benchmark_schema.sql.
+	"""Return DDL statements for *section* from benchmark_schema_copy.sql.
 
 	Skips CREATE DATABASE and USE statements (those are handled inline).
 	Substitutes {table} and {db} placeholders with the supplied values.
 	"""
-	sql_path = Path(__file__).parent / "benchmark_schema.sql"
+	sql_path = Path(__file__).parent / "benchmark_schema_copy.sql"
 	text = sql_path.read_text(encoding="utf-8")
 
 	section_markers = {
