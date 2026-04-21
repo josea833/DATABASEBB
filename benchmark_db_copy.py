@@ -350,8 +350,8 @@ def ensure_clickhouse_ready(cfg: ClickHouseConfig, table_name: str, row_target: 
 		ch_stmts = _load_schema_sql("clickhouse", table_name, cfg.database)
 		client.command(ch_stmts[0])
 		result = client.query(
-			f"SELECT count(), coalesce(max(id), 0) FROM {cfg.database}.{table_name}"
-		)
+            f"SELECT count(), ifNull(max(id), 0) FROM {cfg.database}.{table_name}"
+        )
 		row_count = int(result.result_rows[0][0]) if result.result_rows else 0
 		max_id = int(result.result_rows[0][1]) if result.result_rows else 0
 		if row_count < row_target:
@@ -374,7 +374,7 @@ def ensure_clickhouse_ready(cfg: ClickHouseConfig, table_name: str, row_target: 
 
 
 def bootstrap_benchmarks(table_name: str, row_target: int | None = None, rebuild: bool = False) -> int:
-	target = row_target if row_target is not None else load_benchmark_row_target()
-	ensure_mysql_ready(load_mysql_config(), table_name, target, rebuild=rebuild)
-	ensure_clickhouse_ready(load_clickhouse_config(), table_name, target, rebuild=rebuild)
-	return target
+    target = row_target if row_target is not None else load_benchmark_row_target()
+    ensure_mysql_ready(load_mysql_config(), table_name, target, rebuild=rebuild)
+    ensure_clickhouse_ready(load_clickhouse_config(), table_name, target, rebuild=rebuild)
+    return target

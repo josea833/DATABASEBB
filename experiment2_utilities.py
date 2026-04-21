@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass 
+from datetime import datetime
 
 from benchmark_db_copy import (
     generate_benchmark_rows,
@@ -64,28 +65,29 @@ def insert_new_data_clickhouse(table_name: str, start_id: int, row_count: int) -
 
     start_time = time.perf_counter()
 
+    column_names = ['id', 'sku', 'product_name', 'category', 'brand', 
+                   'color_type', 'size_label', 'material', 'price', 
+                   'weight_grams', 'stock_quantity', 'description', 'created_at']
+
     batch_size = 5000
     for i in range(0, row_count, batch_size):
         batch_rows = min(batch_size, row_count - i)
         rows = generate_benchmark_rows(start_id + i, batch_rows)
-
-        data = {
-            'id': [row[0] for row in rows],
-            'sku': [row[1] for row in rows],
-            'product_name': [row[2] for row in rows],
-            'category': [row[3] for row in rows],
-            'brand': [row[4] for row in rows],
-            'color_type': [row[5] for row in rows],
-            'size_label': [row[6] for row in rows],
-            'material': [row[7] for row in rows],
-            'price': [row[8] for row in rows],
-            'weight_grams': [row[9] for row in rows],
-            'stock_quantity': [row[10] for row in rows],
-            'description': [row[11] for row in rows],
-            'created_at': [row[12] for row in rows],
-        }
-
-        client.insert_df(f"{table_name}", data)
+        
+        # Convert created_at from string to datetime for ClickHouse
+        converted_rows = []
+        for row in rows:
+            row_list = list(row)
+            # Convert the last element (created_at) from string to datetime
+            row_list[-1] = datetime.strptime(row_list[-1], "%Y-%m-%d %H:%M:%S")
+            converted_rows.append(tuple(row_list))
+        
+        # Insert with converted rows
+        client.insert(
+            table=f"{table_name}",
+            data=converted_rows,
+            column_names=column_names
+        )
 
     client.close()
     return (time.perf_counter() - start_time) * 1000.0
@@ -95,7 +97,7 @@ def query_recent_data_mysql(table_name: str, lookback_seconds: int = 60) -> tupl
     sql = f"""
     SELECT COUNT(*), MAX(created_at),  SUM(stock_quantity)
     FROM {table_name}
-    where created_at >= DATE_SUB(NOW(), INTERVAL {lookback_seconds} SECOND
+    where created_at >= DATE_SUB(NOW(), INTERVAL {lookback_seconds} SECOND)
     """
 
     start = time.perf_counter()
@@ -113,7 +115,7 @@ def query_recent_data_clickhouse(table_name:str, lookback_seconds: int = 60) -> 
     sql = f"""
     SELECT COUNT(*), MAX(created_at), SUM(stock_quantity)
     FROM {table_name}
-    WHERE created_at >= now() - INTERVAL{lookback_seconds} SECOND
+    WHERE created_at >= now() - INTERVAL {lookback_seconds} SECOND
     """
 
     start = time.perf_counter()

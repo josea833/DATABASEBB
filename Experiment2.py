@@ -47,6 +47,17 @@ def print_report(result: RealTimeResult) -> None:
     print(f" MySQL: {'New Data Visible' if result.mysql_new_data_visible else 'New Data not visible'}")
     print(f" Clickhouse: {'New Data visible' if result.clickhouse_new_data_visible else 'New Data not visible'}")
 
+    print(f"\n Real-time Analytics Score:")
+    if query_speedup > 2 and insert_speedup > 1:
+        print("  ★★★ EXCELLENT - ClickHouse is ideal for real-time analytics")
+    elif query_speedup > 1.5:
+        print("  ★★ GOOD - ClickHouse performs well for real-time queries")
+    elif query_speedup > 1:
+        print("  ★ FAIR - ClickHouse is faster but consider other factors")
+    else:
+        print("  • MySQL may be better for this specific workload")
+    
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Experiment 2: Real-time Data capture and query performance",
