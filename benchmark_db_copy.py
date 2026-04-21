@@ -360,15 +360,21 @@ def ensure_clickhouse_ready(cfg: ClickHouseConfig, table_name: str, row_target: 
 			while remaining > 0:
 				batch_size = min(INSERT_BATCH_SIZE, remaining)
 				rows = generate_benchmark_rows(next_id, batch_size)
-				value_sql = ", ".join(
-					"(" + ", ".join(_clickhouse_literal(value) for value in row) + ")"
-					for row in rows
-				)
-				client.command(
-					f"INSERT INTO {cfg.database}.{table_name} ({', '.join(BENCHMARK_COLUMNS)}) VALUES {value_sql}"
-				)
-				next_id += batch_size
-				remaining -= batch_size
+				from datetime import datetime
+				converted_rows = []
+				for row in rows:
+					row_list = list(row)
+					if isinstance(row_list[-1], str):
+						row_list[-1] = datetime.strptime(row_list[-1], "%Y-%m-%d %H:%M:%S")
+					converted_rows.append(tuple(row_list))
+			client.insert(
+                    f"`{cfg.database}`.`{table_name}`",
+                    converted_rows,
+                    column_names=BENCHMARK_COLUMNS
+            )
+			next_id += batch_size
+			remaining -= batch_size			
+                
 	finally:
 		client.close()
 
