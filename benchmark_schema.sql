@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS {db}.{table} (
     created_at     DateTime
 )
 ENGINE = MergeTree
-ORDER BY (created_at, id);
+ORDER BY (created_at, id) --primary key
+PRIMARY KEY (created_at, id);
+
 
 
 -- Notes

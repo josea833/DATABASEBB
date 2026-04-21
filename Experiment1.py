@@ -15,10 +15,11 @@ Run examples:
 It is intentionally structured so additional experiments can be added later
 as separate runner functions.
 
-Transformation is needed for clickhouse
-the data must be sorted by id and created_at to achieve optimal compression and query performance,
-which is done in the data loading step in benchmark_db.py. 
-The MySQL table uses InnoDB with a clustered primary key on id, which also benefits from sorted data for compression and scan efficiency.
+No transformations are needed: Each DB implements its own engine MYSQL has InnoDB and ClickHouse has MergeTree, and we use the same logical table structure and data in both. 
+The differences in storage and query performance will be due to the underlying engine optimizations.
+Clickhouse utilizes merge tree storage engine with columnar format, which is optimized for analytical queries and can achieve better compression and scan performance on wide tables.
+MySQL uses InnoDB with a clustered primary key on id, which benefits from sorted data for compression and scan efficiency.
+
 """
 
 from __future__ import annotations

@@ -105,7 +105,7 @@ def load_mysql_config() -> MysqlConfig:
 		port=int(_env("MYSQL_PORT", "3306")),
 		user=_env("MYSQL_USER", "root"),
 		password=_env("MYSQL_PASSWORD", ""),
-		database=_env("MYSQL_DATABASE", "benchmark_db"),
+		database=_env("MYSQL_DATABASE", "DBProj"),
 	)
 
 
@@ -115,7 +115,7 @@ def load_clickhouse_config() -> ClickHouseConfig:
 		port=int(_env("CLICKHOUSE_PORT", "8123")),
 		user=_env("CLICKHOUSE_USER", "default"),
 		password=_env("CLICKHOUSE_PASSWORD", ""),
-		database=_env("CLICKHOUSE_DATABASE", "benchmark_db"),
+		database=_env("CLICKHOUSE_DATABASE", "DBProj"),
 	)
 
 
