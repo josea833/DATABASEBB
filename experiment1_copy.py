@@ -29,7 +29,7 @@ import time
 from dataclasses import dataclass
 from typing import Iterable, List
 
-from benchmark_db import bootstrap_benchmarks, connect_clickhouse, connect_mysql, load_benchmark_row_target, load_clickhouse_config, load_mysql_config
+from benchmark_db_copy import bootstrap_benchmarks, connect_clickhouse, connect_mysql, load_benchmark_row_target, load_clickhouse_config, load_mysql_config
 
 
 @dataclass

@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 
 
 type BenchmarkRow = tuple[
@@ -349,6 +350,8 @@ def ensure_clickhouse_ready(cfg: ClickHouseConfig, table_name: str, row_target: 
 			client.command(f"DROP TABLE IF EXISTS {cfg.database}.{table_name} SYNC")
 		ch_stmts = _load_schema_sql("clickhouse", table_name, cfg.database)
 		client.command(ch_stmts[0])
+		time.sleep(0.5)
+
 		result = client.query(
             f"SELECT count(), ifNull(max(id), 0) FROM {cfg.database}.{table_name}"
         )
