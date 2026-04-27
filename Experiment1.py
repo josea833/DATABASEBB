@@ -12,13 +12,14 @@ Run examples:
 	python Experiment1.py --table products_wide --runs 5 --rows 100000
 	python Experiment1.py --check-connections
 
-It is intentionally structured so additional experiments can be added later
-as separate runner functions.
 
 No transformations are needed: Each DB implements its own engine MYSQL has InnoDB and ClickHouse has MergeTree, and we use the same logical table structure and data in both. 
 The differences in storage and query performance will be due to the underlying engine optimizations.
 Clickhouse utilizes merge tree storage engine with columnar format, which is optimized for analytical queries and can achieve better compression and scan performance on wide tables.
 MySQL uses InnoDB with a clustered primary key on id, which benefits from sorted data for compression and scan efficiency.
+
+# The query is a large-range filter + aggregation + grouping/order, which is a common pattern in analytical workloads. 
+# It filters by id and created_at, groups by category/brand/color_type, and orders by weighted_revenue.
 
 """
 
@@ -31,6 +32,7 @@ from dataclasses import dataclass
 from typing import Iterable, List
 
 from benchmark_db import bootstrap_benchmarks, connect_clickhouse, connect_mysql, load_benchmark_row_target, load_clickhouse_config, load_mysql_config
+from experiment2_utilities import get_total_rows_clickhouse
 
 
 @dataclass
@@ -42,6 +44,7 @@ class QueryResult:
 @dataclass
 class ExperimentSummary:
 	row_count: int
+	clickhouse_row_count: int
 	mysql_storage_bytes: int
 	clickhouse_storage_bytes: int
 	mysql_total_grouped_rows: int
@@ -49,7 +52,8 @@ class ExperimentSummary:
 	mysql_workload_runs_ms: List[float]
 	clickhouse_workload_runs_ms: List[float]
 
-
+# Utility functions for measuring storage of clickhouse and mysql
+# For MySQL, we query the information_schema.tables for the data_length and index_length of the specified table.
 def mysql_storage_bytes(conn, database: str, table: str) -> int:
 	sql = """
 	SELECT COALESCE(data_length + index_length, 0)
@@ -62,7 +66,7 @@ def mysql_storage_bytes(conn, database: str, table: str) -> int:
 	cur.close()
 	return int(row[0] if row else 0)
 
-
+#ClickHouse does not have a direct equivalent to MySQL's information_schema, but we can query the system.parts table to sum the bytes_on_disk for all active parts of the specified table.
 def clickhouse_storage_bytes(client, database: str, table: str) -> int:
 	sql = """
 	SELECT COALESCE(sum(bytes_on_disk), 0)
@@ -72,7 +76,8 @@ def clickhouse_storage_bytes(client, database: str, table: str) -> int:
 	result = client.query(sql, parameters={"db": database, "tbl": table})
 	return int(result.result_rows[0][0] if result.result_rows else 0)
 
-
+# Perform the actual querying of mysql, we build the query before starting time
+# SQL QUERIES MATCH
 def mysql_workload_query(conn, table: str, min_id: int, max_id: int, start_ts: str, end_ts: str) -> QueryResult:
 	sql = f"""
 	SELECT COUNT(*)
@@ -94,15 +99,22 @@ def mysql_workload_query(conn, table: str, min_id: int, max_id: int, start_ts: s
 		LIMIT 100
 	) t
 	"""
+	#Start Timer
 	start = time.perf_counter()
+	#get cursor and execute query with parameters
 	cur = conn.cursor()
 	cur.execute(sql, (min_id, max_id, start_ts, end_ts))
+
+	#retrieve count result from the first row and first column of the result set
 	row = cur.fetchone()
+	#close cursor and calculate elapsed time in milliseconds
 	cur.close()
 	elapsed_ms = (time.perf_counter() - start) * 1000.0
+	#return the count value and elapsed time as a QueryResult dataclass instance
 	return QueryResult(value=int(row[0]), elapsed_ms=elapsed_ms)
 
-
+# Perform the actual querying of clickhouse, we build the query before starting time
+# SQL QUERIES MATCH, however the parameter syntax is a bit different
 def clickhouse_workload_query(client, table: str, min_id: int, max_id: int, start_ts: str, end_ts: str) -> QueryResult:
 	sql = f"""
 	SELECT COUNT(*)
@@ -124,6 +136,7 @@ def clickhouse_workload_query(client, table: str, min_id: int, max_id: int, star
 		LIMIT 100
 	)
 	"""
+	#start timer, execute query with parameters, and calculate elapsed time in milliseconds
 	start = time.perf_counter()
 	result = client.query(
 		sql,
@@ -135,7 +148,9 @@ def clickhouse_workload_query(client, table: str, min_id: int, max_id: int, star
 		},
 	)
 	elapsed_ms = (time.perf_counter() - start) * 1000.0
+	#retrieve count result from the first row and first column of the result set
 	value = int(result.result_rows[0][0])
+	#return the count value and elapsed time as a QueryResult dataclass instance
 	return QueryResult(value=value, elapsed_ms=elapsed_ms)
 
 
@@ -145,6 +160,11 @@ def mysql_row_count(conn, table: str) -> int:
 	row = cur.fetchone()
 	cur.close()
 	return int(row[0]) if row else 0
+
+def ch_row_count(client, database: str, table: str) -> int:
+	sql = "SELECT COUNT(*) FROM {db}.{tbl}".format(db=database, tbl=table)
+	result = client.query(sql)
+	return int(result.result_rows[0][0]) if result.result_rows else 0
 
 
 def median(values: Iterable[float]) -> float:
@@ -192,7 +212,7 @@ def check_connections() -> int:
 
 
 def run_experiment_1(table_name: str, runs: int = 5, row_target: int | None = None) -> ExperimentSummary:
-	bootstrap_benchmarks(table_name, row_target=row_target)
+	bootstrap_benchmarks(table_name, row_target=row_target, rebuild=True)
 	mysql_cfg = load_mysql_config()
 	ch_cfg = load_clickhouse_config()
 
@@ -201,6 +221,7 @@ def run_experiment_1(table_name: str, runs: int = 5, row_target: int | None = No
 
 	try:
 		row_count = mysql_row_count(mysql_conn, table_name)
+		ch_row_count_val = ch_row_count(ch_client, ch_cfg.database, table_name)
 		mysql_storage = mysql_storage_bytes(mysql_conn, mysql_cfg.database, table_name)
 		ch_storage = clickhouse_storage_bytes(ch_client, ch_cfg.database, table_name)
 		filter_min_id = 1
@@ -227,6 +248,7 @@ def run_experiment_1(table_name: str, runs: int = 5, row_target: int | None = No
 
 		return ExperimentSummary(
 			row_count=row_count,
+			clickhouse_row_count=ch_row_count_val,
 			mysql_storage_bytes=mysql_storage,
 			clickhouse_storage_bytes=ch_storage,
 			mysql_total_grouped_rows=mysql_grouped_rows,
@@ -241,6 +263,7 @@ def run_experiment_1(table_name: str, runs: int = 5, row_target: int | None = No
 
 def print_report(summary: ExperimentSummary) -> None:
 	print(f"Rows benchmarked:         {summary.row_count}")
+	print(f"ClickHouse rows counted: {summary.clickhouse_row_count}")
 	mysql_storage = summary.mysql_storage_bytes
 	ch_storage = summary.clickhouse_storage_bytes
 	ratio = (mysql_storage / ch_storage) if ch_storage > 0 else float("inf")
@@ -303,7 +326,7 @@ def main() -> None:
 	if args.check_connections:
 		raise SystemExit(check_connections())
 	if args.bootstrap:
-		initialized_rows = bootstrap_benchmarks(args.table, row_target=args.rows)
+		initialized_rows = bootstrap_benchmarks(args.table, row_target=args.rows, rebuild=True)
 		print(f"Initialized MySQL and ClickHouse for table '{args.table}' with target rows={initialized_rows}")
 		return
 	summary = run_experiment_1(table_name=args.table, runs=args.runs, row_target=args.rows)

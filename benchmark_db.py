@@ -346,7 +346,7 @@ def ensure_clickhouse_ready(cfg: ClickHouseConfig, table_name: str, row_target: 
 	client = connect_clickhouse(cfg)
 	try:
 		if rebuild:
-			client.command(f"DROP TABLE IF EXISTS {cfg.database}.{table_name} SYNC")
+			client.command(f"DROP TABLE IF EXISTS {cfg.database}.{table_name}")
 		ch_stmts = _load_schema_sql("clickhouse", table_name, cfg.database)
 		client.command(ch_stmts[0])
 		result = client.query(
